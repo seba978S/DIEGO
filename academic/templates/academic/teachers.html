@@ -1,0 +1,200 @@
+<!-- Heredamos el diseño base -->
+{% extends 'academic/base.html' %}
+{% block title %}Docentes - Academic Project{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4 border-bottom pb-2">Gestión de Docentes</h2>
+        
+        <div class="card shadow-sm border-0 mb-4 bg-light">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Agregar Nuevo Docente</h5>
+                <form id="add-teacher-form">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="first_name" placeholder="Nombre (ej. Alan)" required>
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="last_name" placeholder="Apellido (ej. Turing)" required>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">Guardar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <h4 class="mb-3">Listado Actual de Docentes</h4>
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped m-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="ps-4">ID</th>
+                                <th>Nombre</th>
+                                <th>Apellido</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teachers-tbody">
+                            <tr>
+                                <td colspan="4" class="text-center py-4">Cargando docentes...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PARA EDITAR DOCENTE -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Docente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="edit-teacher-form">
+          <div class="modal-body">
+              <input type="hidden" id="edit_id">
+              <div class="mb-3">
+                  <label class="form-label">Nombre</label>
+                  <input type="text" class="form-control" id="edit_first_name" required>
+              </div>
+              <div class="mb-3">
+                  <label class="form-label">Apellido</label>
+                  <input type="text" class="form-control" id="edit_last_name" required>
+              </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let editModal;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        editModal = new bootstrap.Modal(document.getElementById('editModal'));
+        fetchTeachersData();
+    });
+
+    document.getElementById('add-teacher-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const firstName = document.getElementById('first_name').value;
+        const lastName = document.getElementById('last_name').value;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            const response = await fetch('/api/teachers/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({ first_name: firstName, last_name: lastName })
+            });
+            if (response.ok) {
+                document.getElementById('add-teacher-form').reset();
+                fetchTeachersData();
+            } else {
+                alert('Hubo un problema al guardar el docente.');
+            }
+        } catch (error) {
+            alert('Error de conexión.');
+        }
+    });
+
+    document.getElementById('edit-teacher-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit_id').value;
+        const firstName = document.getElementById('edit_first_name').value;
+        const lastName = document.getElementById('edit_last_name').value;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            const response = await fetch(`/api/teachers/${id}/`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({ first_name: firstName, last_name: lastName })
+            });
+
+            if (response.ok) {
+                editModal.hide();
+                fetchTeachersData();
+            } else {
+                alert('Hubo un problema al actualizar.');
+            }
+        } catch (error) {
+            alert('Error de conexión.');
+        }
+    });
+
+    async function fetchTeachersData() {
+        try {
+            const response = await fetch('/api/teachers/');
+            const teachers = await response.json();
+            const tbody = document.getElementById('teachers-tbody');
+            tbody.innerHTML = ''; 
+
+            if (teachers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No hay docentes.</td></tr>';
+                return;
+            }
+
+            teachers.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="ps-4 align-middle">${t.id}</td>
+                    <td class="align-middle">${t.first_name}</td>
+                    <td class="align-middle">${t.last_name}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-warning me-2" onclick="openEditModal(${t.id}, '${t.first_name}', '${t.last_name}')">Editar</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteTeacher(${t.id})">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            document.getElementById('teachers-tbody').innerHTML = '<tr><td colspan="4" class="text-danger text-center">Error al conectar con la API.</td></tr>';
+        }
+    }
+
+    function openEditModal(id, fn, ln) {
+        document.getElementById('edit_id').value = id;
+        document.getElementById('edit_first_name').value = fn;
+        document.getElementById('edit_last_name').value = ln;
+        editModal.show();
+    }
+
+    async function deleteTeacher(id) {
+        if (!confirm('¿Seguro que quieres eliminar este docente? Se borrarán también los cursos asignados a él.')) return;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        try {
+            const response = await fetch(`/api/teachers/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': csrftoken }
+            });
+            if (response.ok) fetchTeachersData();
+            else alert('No se pudo eliminar.');
+        } catch (error) {
+            alert('Error de conexión.');
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,50 @@
+[
+  {
+    "model": "library.author",
+    "pk": 1,
+    "fields": {
+      "first_name": "Gabriel",
+      "last_name": "García Márquez"
+    }
+  },
+  {
+    "model": "library.author",
+    "pk": 2,
+    "fields": {
+      "first_name": "Isabel",
+      "last_name": "Allende"
+    }
+  },
+  {
+    "model": "library.member",
+    "pk": 1,
+    "fields": {
+      "first_name": "Juan",
+      "last_name": "Pérez"
+    }
+  },
+  {
+    "model": "library.book",
+    "pk": 1,
+    "fields": {
+      "title": "Cien Años de Soledad",
+      "author": 1
+    }
+  },
+  {
+    "model": "library.book",
+    "pk": 2,
+    "fields": {
+      "title": "La Casa de los Espíritus",
+      "author": 2
+    }
+  },
+  {
+    "model": "library.loan",
+    "pk": 1,
+    "fields": {
+      "member": 1,
+      "book": 1
+    }
+  }
+]

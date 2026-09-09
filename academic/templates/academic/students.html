@@ -1,0 +1,256 @@
+<!-- Heredamos el diseño base (menú y librerías) de base.html -->
+{% extends 'academic/base.html' %}
+
+<!-- Cambiamos el título de la pestaña del navegador -->
+{% block title %}Estudiantes - Academic Project{% endblock %}
+
+<!-- Inyectamos el contenido visual en el 'block content' de base.html -->
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4 border-bottom pb-2">Gestión de Estudiantes</h2>
+        
+        <!-- FORMULARIO PARA AGREGAR ESTUDIANTE -->
+        <div class="card shadow-sm border-0 mb-4 bg-light">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Agregar Nuevo Estudiante</h5>
+                <form id="add-student-form">
+                    <!-- Token de seguridad necesario para peticiones POST en Django -->
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="first_name" placeholder="Nombre (ej. Juan)" required>
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="last_name" placeholder="Apellido (ej. Pérez)" required>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">Guardar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- TABLA DE ESTUDIANTES -->
+        <h4 class="mb-3">Listado Actual</h4>
+        <!-- Tarjeta blanca con sombra donde vivirá nuestra tabla -->
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped m-0">
+                        <!-- Cabecera de la tabla (columnas) -->
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="ps-4">ID</th>
+                                <th>Nombre</th>
+                                <th>Apellido</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <!-- Cuerpo de la tabla. Al principio muestra un "Cargando" hasta que JS traiga los datos -->
+                        <tbody id="students-tbody">
+                            <tr>
+                                <td colspan="4" class="text-center py-4">
+                                    <div class="spinner-border text-success" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Cargando estudiantes...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PARA EDITAR ESTUDIANTE -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editModalLabel">Editar Estudiante</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="edit-student-form">
+          <div class="modal-body">
+              <input type="hidden" id="edit_id">
+              <div class="mb-3">
+                  <label for="edit_first_name" class="form-label">Nombre</label>
+                  <input type="text" class="form-control" id="edit_first_name" required>
+              </div>
+              <div class="mb-3">
+                  <label for="edit_last_name" class="form-label">Apellido</label>
+                  <input type="text" class="form-control" id="edit_last_name" required>
+              </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+<!-- Inyectamos nuestro código JavaScript en el 'block extra_js' de base.html -->
+{% block extra_js %}
+<script>
+    // Referencia al Modal de Bootstrap para poder abrirlo/cerrarlo por código
+    let editModal;
+
+    // Este evento espera a que el HTML cargue por completo en el navegador antes de consultar datos
+    document.addEventListener('DOMContentLoaded', () => {
+        // Inicializamos el modal
+        editModal = new bootstrap.Modal(document.getElementById('editModal'));
+        fetchStudentsData();
+    });
+
+    // EVENTO: Escuchar el botón de "Guardar" del formulario de Agregar
+    document.getElementById('add-student-form').addEventListener('submit', async (e) => {
+        e.preventDefault(); // Evita que la página se recargue
+        
+        const firstName = document.getElementById('first_name').value;
+        const lastName = document.getElementById('last_name').value;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            const response = await fetch('/api/students/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    first_name: firstName,
+                    last_name: lastName
+                })
+            });
+
+            if (response.ok) {
+                document.getElementById('add-student-form').reset();
+                fetchStudentsData(); // Recarga la tabla
+            } else {
+                alert('Hubo un problema al guardar el estudiante.');
+            }
+        } catch (error) {
+            console.error("Error enviando datos:", error);
+            alert('Error de conexión al intentar guardar.');
+        }
+    });
+
+    // EVENTO: Guardar cambios en el Modal de Edición
+    document.getElementById('edit-student-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const studentId = document.getElementById('edit_id').value;
+        const firstName = document.getElementById('edit_first_name').value;
+        const lastName = document.getElementById('edit_last_name').value;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            // Petición PUT para actualizar todos los datos de un registro específico en DRF
+            const response = await fetch(`/api/students/${studentId}/`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    first_name: firstName,
+                    last_name: lastName
+                })
+            });
+
+            if (response.ok) {
+                editModal.hide(); // Cerrar el modal animadamente
+                fetchStudentsData(); // Recargar la tabla
+            } else {
+                alert('Hubo un problema al actualizar el estudiante.');
+            }
+        } catch (error) {
+            console.error("Error editando datos:", error);
+            alert('Error de conexión al intentar editar.');
+        }
+    });
+
+    // Función asíncrona para consultar la API y dibujar la tabla
+    async function fetchStudentsData() {
+        try {
+            const response = await fetch('/api/students/');
+            if (!response.ok) throw new Error('Error en la respuesta de la red');
+            
+            const students = await response.json();
+            const tbody = document.getElementById('students-tbody');
+            tbody.innerHTML = ''; 
+
+            if (students.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No hay estudiantes registrados.</td></tr>';
+                return;
+            }
+
+            // Recorremos la lista de estudiantes
+            students.forEach(student => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="ps-4 align-middle">${student.id}</td>
+                    <td class="align-middle">${student.first_name}</td>
+                    <td class="align-middle">${student.last_name}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-warning me-2" onclick="openEditModal(${student.id}, '${student.first_name}', '${student.last_name}')">Editar</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteStudent(${student.id})">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } catch (error) {
+            console.error("Error cargando estudiantes:", error);
+            document.getElementById('students-tbody').innerHTML = 
+                '<tr><td colspan="4" class="text-danger text-center py-4">❌ Error de conexión con la API.</td></tr>';
+        }
+    }
+
+    // Función que se ejecuta al darle al botón "Editar" en la tabla
+    function openEditModal(id, firstName, lastName) {
+        // Carga los valores actuales en las cajas de texto del modal
+        document.getElementById('edit_id').value = id;
+        document.getElementById('edit_first_name').value = firstName;
+        document.getElementById('edit_last_name').value = lastName;
+        
+        // Abre el modal de Bootstrap en pantalla
+        editModal.show();
+    }
+
+    // Función que se ejecuta al darle al botón "Eliminar" en la tabla
+    async function deleteStudent(id) {
+        // Pedimos confirmación al usuario antes de proceder a borrar
+        if (!confirm('¿Estás seguro de que quieres eliminar a este estudiante?')) return;
+
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        try {
+            // Petición DELETE a la API apuntando al ID específico
+            const response = await fetch(`/api/students/${id}/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': csrftoken
+                }
+            });
+
+            if (response.ok) {
+                // Volvemos a consultar la lista para que desaparezca visualmente el eliminado
+                fetchStudentsData(); 
+            } else {
+                alert('No se pudo eliminar el estudiante.');
+            }
+        } catch (error) {
+            console.error("Error eliminando:", error);
+            alert('Error de conexión.');
+        }
+    }
+</script>
+{% endblock %}

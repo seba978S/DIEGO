@@ -1,0 +1,22 @@
+<!-- Heredamos el diseño base general -->
+{% extends 'academic/base.html' %}
+
+{% block title %}Inicio - Academic Project{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Centro todo el contenido con text-center y un margen vertical (py-5) -->
+    <div class="col-12 text-center py-5">
+        <h1 class="display-4 mb-3">¡Bienvenido a Academic Project!</h1>
+        <p class="lead text-muted mb-4">Explora los cursos y estudiantes a través de nuestra API con Django REST Framework.</p>
+        
+        <!-- Botones que redirigen a nuestras dos páginas principales HTML -->
+        <div>
+            <a href="/docentes/" class="btn btn-warning btn-lg me-2">Ver Docentes</a>
+            <a href="/cursos/" class="btn btn-primary btn-lg me-2">Ver Cursos</a>
+            <a href="/estudiantes/" class="btn btn-success btn-lg me-2">Ver Estudiantes</a>
+            <a href="/admin/" class="btn btn-dark btn-lg" target="_blank">⚙️ Administración</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

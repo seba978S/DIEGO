@@ -1,0 +1,366 @@
+<!-- Heredamos el diseño y menú superior de base.html -->
+{% extends 'academic/base.html' %}
+
+{% block title %}Cursos - Academic Project{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4 border-bottom pb-2">Gestión de Cursos</h2>
+        
+        <!-- FORMULARIO PARA CREAR CURSO -->
+        <div class="card shadow-sm border-0 mb-4 bg-light">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Agregar Nuevo Curso</h5>
+                <form id="add-course-form">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="course_name" placeholder="Nombre de la nueva clase/curso" required>
+                        </div>
+                        <div class="col-md-5">
+                            <select class="form-select" id="course_teacher" required>
+                                <option value="" disabled selected>Asignar un Profesor...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-success w-100">Crear Curso</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- FORMULARIO PARA INSCRIBIR ESTUDIANTE A UN CURSO -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Inscribir Estudiante en un Curso</h5>
+                <form id="enroll-student-form">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <select class="form-select" id="enroll_student" required>
+                                <option value="" disabled selected>Selecciona un Estudiante...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <select class="form-select" id="enroll_course" required>
+                                <option value="" disabled selected>Selecciona un Curso...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">Inscribir</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <h4 class="mb-3">Listado Actual</h4>
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped m-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="ps-4">ID</th>
+                                <th>Nombre del Curso</th>
+                                <th>Profesor Asignado</th>
+                                <th>Estudiantes Inscritos</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="courses-tbody">
+                            <tr>
+                                <td colspan="5" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Cargando cursos...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PARA EDITAR CURSO -->
+<div class="modal fade" id="editCourseModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Curso</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="edit-course-form">
+          <div class="modal-body">
+              <input type="hidden" id="edit_course_id">
+              <div class="mb-3">
+                  <label class="form-label">Nombre del Curso</label>
+                  <input type="text" class="form-control" id="edit_course_name" required>
+              </div>
+              <div class="mb-3">
+                  <label class="form-label">Asignar Profesor</label>
+                  <select class="form-select" id="edit_course_teacher" required>
+                      <!-- Se llenará desde JS -->
+                  </select>
+              </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let editCourseModal;
+    let globalTeachersMap = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+        editCourseModal = new bootstrap.Modal(document.getElementById('editCourseModal'));
+        fetchCoursesData();
+        populateDropdowns();
+    });
+
+    // EVENTO: Crear un nuevo curso
+    document.getElementById('add-course-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const courseName = document.getElementById('course_name').value;
+        const teacherId = document.getElementById('course_teacher').value;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            const response = await fetch('/api/courses/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    name: courseName,
+                    teacher: teacherId
+                })
+            });
+
+            if (response.ok) {
+                alert('¡Curso creado exitosamente!');
+                document.getElementById('add-course-form').reset();
+                fetchCoursesData(); 
+                populateDropdowns(); 
+            } else {
+                alert('Hubo un problema al crear el curso.');
+            }
+        } catch (error) {
+            alert('Error de conexión.');
+        }
+    });
+
+    // EVENTO: Editar Curso
+    document.getElementById('edit-course-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit_course_id').value;
+        const name = document.getElementById('edit_course_name').value;
+        const teacher = document.getElementById('edit_course_teacher').value;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            const response = await fetch(`/api/courses/${id}/`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({ name: name, teacher: teacher })
+            });
+
+            if (response.ok) {
+                editCourseModal.hide();
+                fetchCoursesData();
+            } else {
+                alert('Hubo un problema al editar el curso.');
+            }
+        } catch (error) {
+            alert('Error de conexión.');
+        }
+    });
+
+    // EVENTO: Inscribir estudiante a curso
+    document.getElementById('enroll-student-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const studentId = document.getElementById('enroll_student').value;
+        const courseId = document.getElementById('enroll_course').value;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            const response = await fetch('/api/enrollments/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    student: studentId,
+                    course: courseId
+                })
+            });
+
+            if (response.ok) {
+                alert('¡Estudiante inscrito exitosamente al curso!');
+                document.getElementById('enroll-student-form').reset();
+                fetchCoursesData(); 
+            } else {
+                const errorData = await response.json();
+                if (errorData.non_field_errors) {
+                     alert('El estudiante ya se encuentra inscrito en este curso.');
+                } else {
+                     alert('Hubo un problema al inscribir al estudiante.');
+                }
+            }
+        } catch (error) {
+            alert('Error de conexión.');
+        }
+    });
+
+    // Cargar listas desplegables (comboboxes)
+    async function populateDropdowns() {
+        try {
+            const [studentsRes, coursesRes, teachersRes] = await Promise.all([
+                fetch('/api/students/'),
+                fetch('/api/courses/'),
+                fetch('/api/teachers/')
+            ]);
+            
+            if (studentsRes.ok) {
+                const students = await studentsRes.json();
+                const studentSelect = document.getElementById('enroll_student');
+                studentSelect.innerHTML = '<option value="" disabled selected>Selecciona un Estudiante...</option>';
+                students.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = `${s.first_name} ${s.last_name}`;
+                    studentSelect.appendChild(opt);
+                });
+            }
+
+            if (coursesRes.ok) {
+                const courses = await coursesRes.json();
+                const courseSelect = document.getElementById('enroll_course');
+                courseSelect.innerHTML = '<option value="" disabled selected>Selecciona un Curso...</option>';
+                courses.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    courseSelect.appendChild(opt);
+                });
+            }
+            
+            if (teachersRes.ok) {
+                const teachers = await teachersRes.json();
+                const teacherSelect = document.getElementById('course_teacher');
+                const editTeacherSelect = document.getElementById('edit_course_teacher');
+                
+                teacherSelect.innerHTML = '<option value="" disabled selected>Asignar un Profesor...</option>';
+                editTeacherSelect.innerHTML = '<option value="" disabled selected>Asignar un Profesor...</option>';
+                
+                teachers.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = `${t.first_name} ${t.last_name}`;
+                    teacherSelect.appendChild(opt.cloneNode(true));
+                    editTeacherSelect.appendChild(opt);
+                });
+            }
+        } catch (error) {
+            console.error("Error al cargar los selectores:", error);
+        }
+    }
+
+    async function fetchCoursesData() {
+        try {
+            const [coursesRes, teachersRes, enrollmentsRes, studentsRes] = await Promise.all([
+                fetch('/api/courses/'),
+                fetch('/api/teachers/'),
+                fetch('/api/enrollments/'),
+                fetch('/api/students/')
+            ]);
+
+            const courses = await coursesRes.json();
+            const teachers = await teachersRes.json();
+            const enrollments = await enrollmentsRes.json();
+            const students = await studentsRes.json();
+
+            // Mapear Profesores
+            teachers.forEach(t => globalTeachersMap[t.id] = `${t.first_name} ${t.last_name}`);
+            
+            // Mapear Estudiantes
+            const studentsMap = {};
+            students.forEach(s => studentsMap[s.id] = `${s.first_name} ${s.last_name}`);
+
+            const tbody = document.getElementById('courses-tbody');
+            tbody.innerHTML = ''; 
+
+            if (courses.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No hay cursos disponibles.</td></tr>';
+                return;
+            }
+
+            courses.forEach(course => {
+                const tr = document.createElement('tr');
+                const teacherName = globalTeachersMap[course.teacher] || '<span class="text-danger">Desconocido</span>';
+                
+                const enrolledStudentIds = enrollments.filter(e => e.course === course.id).map(e => e.student);
+                const enrolledNames = enrolledStudentIds.map(id => studentsMap[id]).join(', ');
+                const studentListDisplay = enrolledNames ? enrolledNames : '<span class="text-muted fst-italic">Ninguno</span>';
+
+                tr.innerHTML = `
+                    <td class="ps-4">${course.id}</td>
+                    <td class="fw-bold">${course.name}</td>
+                    <td>${teacherName}</td>
+                    <td>${studentListDisplay}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-warning me-2" onclick="openCourseEditModal(${course.id}, '${course.name}', ${course.teacher})">Editar</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteCourse(${course.id})">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } catch (error) {
+            document.getElementById('courses-tbody').innerHTML = 
+                '<tr><td colspan="5" class="text-danger text-center py-4">❌ Error de conexión con la API.</td></tr>';
+        }
+    }
+
+    function openCourseEditModal(id, name, teacherId) {
+        document.getElementById('edit_course_id').value = id;
+        document.getElementById('edit_course_name').value = name;
+        document.getElementById('edit_course_teacher').value = teacherId;
+        editCourseModal.show();
+    }
+
+    async function deleteCourse(id) {
+        if (!confirm('¿Seguro que quieres eliminar este curso?')) return;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        try {
+            const response = await fetch(`/api/courses/${id}/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': csrftoken }
+            });
+            if (response.ok) fetchCoursesData();
+            else alert('No se pudo eliminar el curso.');
+        } catch (error) {
+            alert('Error de conexión.');
+        }
+    }
+</script>
+{% endblock %}
